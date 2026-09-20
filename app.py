@@ -29,10 +29,13 @@ def ensure_webhook():
         return
     _webhook_attempted = True
     try:
-        r = requests.post(f'{TG}/setWebhook', data={
+        payload = {
             'url': f'{BASE_URL}/telegram',
             'allowed_updates': json.dumps(['message']),
-        }, timeout=30)
+        }
+        if WEBHOOK_SECRET:
+            payload['secret_token'] = WEBHOOK_SECRET
+        r = requests.post(f'{TG}/setWebhook', data=payload, timeout=30)
         if r.ok:
             _webhook_ready = True
             log.info('Telegram webhook set to %s/telegram', BASE_URL)

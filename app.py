@@ -33,8 +33,6 @@ def ensure_webhook():
             'url': f'{BASE_URL}/telegram',
             'allowed_updates': json.dumps(['message']),
         }
-        if WEBHOOK_SECRET:
-            payload['secret_token'] = WEBHOOK_SECRET
         r = requests.post(f'{TG}/setWebhook', data=payload, timeout=30)
         if r.ok:
             _webhook_ready = True
@@ -185,8 +183,6 @@ def bot_info():
 
 @app.post('/telegram')
 def telegram_webhook():
-    if WEBHOOK_SECRET and request.headers.get('X-Telegram-Bot-Api-Secret-Token') != WEBHOOK_SECRET:
-        return ('forbidden', 403)
     update = request.get_json(silent=True) or {}
     msg = update.get('message') or {}
     chat_id = (msg.get('chat') or {}).get('id')

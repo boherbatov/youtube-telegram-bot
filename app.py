@@ -1,4 +1,4 @@
-import os, re, time, tempfile, threading, logging, json, urllib.parse
+import os, re, time, tempfile, threading, logging, json, urllib.parse, urllib.request
 from pathlib import Path
 import requests
 from flask import Flask, request, jsonify
@@ -73,20 +73,35 @@ def safe_name(value):
     value = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', value).strip(' .')
     return value[:120] or 'YouTube'
 
+PS4_UA = 'Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15'
+TV_CLIENT_VER = '7.20260916.14.00'
+_YT = {'key': None, 'vd': None, 'cfg_at': 0.0}
+
+def yt_cfg():
+    if _YT['key'] and time.time() < _YT['cfg_at'] + 21600:
+        return
+    html = requests.get('https://www.youtube.com/', headers={'User-Agent': 'Mozilla/5.0 Chrome/126'}, timeout=20).text
+    _YT['key'] = re.search(r'"INNERTUBE_API_KEY":"([^"]*)"', html).group(1)
+    _YT['vd'] = re.search(r'"VISITOR_DATA":"([^"]*)"', html).group(1)
+    _YT['cfg_at'] = time.time()
+
 def youtube_headers():
-    if not YT_REFRESH_TOKEN or not YT_CLIENT_SECRET:
-        return {}
+    yt_cfg()
+    headers = {'User-Agent': PS4_UA}
+    if YT_REFRESH_TOKEN and YT_CLIENT_SECRET:
+        headers['Authorization'] = 'Bearer ' + get_access_token()
+    return headers
+
+def get_access_token():
     if _token_cache['token'] and time.time() < _token_cache['expires'] - 120:
-        return {'Authorization': f"Bearer {_token_cache['token']}"}
+        return _token_cache['token']
     r = requests.post('https://www.youtube.com/o/oauth2/token', data={
         'client_id': YT_CLIENT_ID, 'client_secret': YT_CLIENT_SECRET,
         'grant_type': 'refresh_token', 'refresh_token': YT_REFRESH_TOKEN,
     }, timeout=30)
     r.raise_for_status()
-    data = r.json()
-    _token_cache['token'] = data['access_token']
-    _token_cache['expires'] = time.time() + int(data.get('expires_in', 3600))
-    return {'Authorization': f"Bearer {_token_cache['token']}"}
+    data = r.json(); _token_cache['token'] = data['access_token']; _token_cache['expires'] = time.time() + int(data.get('expires_in', 3600))
+    return _token_cache['token']
 
 def opts_for(mode, outdir):
     common = {
@@ -114,9 +129,17 @@ def opts_for(mode, outdir):
             'merge_output_format': 'mp4',
         })
     if YT_REFRESH_TOKEN:
-        # Reuse the OAuth session already authorized for Ariel's Yemot YouTube service.
+        yt_cfg()
+        from yt_dlp.extractor.youtube._base import INNERTUBE_CLIENTS
+        tv = INNERTUBE_CLIENTS['tv']
+        tv['INNERTUBE_CONTEXT']['client']['userAgent'] = PS4_UA
+        tv['INNERTUBE_CONTEXT']['client']['clientVersion'] = TV_CLIENT_VER
         common['http_headers'] = youtube_headers()
-        common['extractor_args'] = {'youtube': {'player_client': [YT_PLAYER_CLIENT]}}
+        common['extractor_args'] = {'youtube': {
+            'player_client': ['tv'],
+            'player_skip': ['webpage', 'configs', 'initial_data'],
+            'visitor_data': [_YT['vd']],
+        }}
     return common
 
 def search_youtube(query):

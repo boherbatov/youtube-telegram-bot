@@ -1,4 +1,4 @@
-import os, re, time, tempfile, threading, logging, json
+import os, re, time, tempfile, threading, logging, json, urllib.parse
 from pathlib import Path
 import requests
 from flask import Flask, request, jsonify
@@ -119,6 +119,15 @@ def opts_for(mode, outdir):
         common['extractor_args'] = {'youtube': {'player_client': [YT_PLAYER_CLIENT]}}
     return common
 
+def search_youtube(query):
+    url = 'https://www.youtube.com/results?' + urllib.parse.urlencode({'search_query': query})
+    r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36'}, timeout=30)
+    r.raise_for_status()
+    ids = re.findall(r'\"videoId\":\"([A-Za-z0-9_-]{11})\"', r.text)
+    if not ids:
+        raise RuntimeError('לא מצאתי תוצאה מתאימה ב-YouTube.')
+    return 'https://www.youtube.com/watch?v=' + ids[0]
+
 def parse_request(text):
     text = (text or '').strip()
     mode = 'audio'
@@ -147,6 +156,8 @@ def upload_file(chat_id, path, mode):
 def process(chat_id, text, status_id=None):
     try:
         mode, target = parse_request(text)
+        if target.startswith('ytsearch1:'):
+            target = search_youtube(target.split(':', 1)[1])
         with tempfile.TemporaryDirectory(prefix='ytbot-') as tmp:
             send_message(chat_id, '⏳ מחפש ומוריד... זה יכול לקחת דקה או שתיים.')
             with yt_dlp.YoutubeDL(opts_for(mode, tmp)) as ydl:

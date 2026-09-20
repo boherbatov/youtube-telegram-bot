@@ -14,6 +14,10 @@ YT_REFRESH_TOKEN = os.environ.get('YT_REFRESH_TOKEN', '')
 MAX_PLAYLIST_ITEMS = int(os.environ.get('MAX_PLAYLIST_ITEMS', '20'))
 MAX_DURATION = int(os.environ.get('MAX_DURATION_SECONDS', '1200'))
 MAX_BYTES = int(os.environ.get('MAX_FILE_BYTES', str(49 * 1024 * 1024)))
+YT_CLIENT_ID = os.environ.get('YT_CLIENT_ID', '861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com')
+YT_CLIENT_SECRET = os.environ.get('YT_CLIENT_SECRET', '')
+YT_PLAYER_CLIENT = os.environ.get('YT_PLAYER_CLIENT', 'tv')
+_token_cache = {'token': None, 'expires': 0}
 TG = f'https://api.telegram.org/bot{BOT_TOKEN}'
 app = Flask(__name__)
 
@@ -43,6 +47,21 @@ def safe_name(value):
     value = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', value).strip(' .')
     return value[:120] or 'YouTube'
 
+def youtube_headers():
+    if not YT_REFRESH_TOKEN or not YT_CLIENT_SECRET:
+        return {}
+    if _token_cache['token'] and time.time() < _token_cache['expires'] - 120:
+        return {'Authorization': f"Bearer {_token_cache['token']}"}
+    r = requests.post('https://www.youtube.com/o/oauth2/token', data={
+        'client_id': YT_CLIENT_ID, 'client_secret': YT_CLIENT_SECRET,
+        'grant_type': 'refresh_token', 'refresh_token': YT_REFRESH_TOKEN,
+    }, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    _token_cache['token'] = data['access_token']
+    _token_cache['expires'] = time.time() + int(data.get('expires_in', 3600))
+    return {'Authorization': f"Bearer {_token_cache['token']}"}
+
 def opts_for(mode, outdir):
     common = {
         'outtmpl': str(Path(outdir) / '%(playlist_index&{} - |)s%(title).120s [%(id)s].%(ext)s'),
@@ -69,10 +88,9 @@ def opts_for(mode, outdir):
             'merge_output_format': 'mp4',
         })
     if YT_REFRESH_TOKEN:
-        # Reuse the OAuth refresh token already used by Ariel's Yemot YouTube service.
-        common['username'] = 'oauth2'
-        common['password'] = YT_REFRESH_TOKEN
-        common['extractor_args'] = {'youtube': {'player_client': ['tv']}}
+        # Reuse the OAuth session already authorized for Ariel's Yemot YouTube service.
+        common['http_headers'] = youtube_headers()
+        common['extractor_args'] = {'youtube': {'player_client': [YT_PLAYER_CLIENT]}}
     return common
 
 def parse_request(text):

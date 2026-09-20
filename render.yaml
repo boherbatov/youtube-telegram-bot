@@ -14,3 +14,5 @@ services:
         value: https://youtube-telegram-bot.onrender.com
       - key: YT_REFRESH_TOKEN
         sync: false
+      - key: YT_CLIENT_SECRET
+        sync: false

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: youtube-telegram-bot
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        value: https://youtube-telegram-bot.onrender.com
+      - key: YT_REFRESH_TOKEN
+        sync: false

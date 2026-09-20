@@ -116,7 +116,7 @@ def opts_for(mode, outdir):
     }
     if mode == 'audio':
         common.update({
-            'format': 'bestaudio[filesize<49M]/bestaudio/best[filesize<49M]',
+            'format': 'bestaudio/best',
             'postprocessors': [
                 {'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'},
                 {'key': 'FFmpegMetadata', 'add_metadata': True},
@@ -125,7 +125,7 @@ def opts_for(mode, outdir):
     else:
         height = '360' if mode == 'video360' else '720'
         common.update({
-            'format': f'bestvideo[height<={height}][filesize<45M]+bestaudio[filesize<8M]/best[height<={height}][filesize<49M]/best[filesize<49M]',
+            'format': f'best[height<={height}]/best',
             'merge_output_format': 'mp4',
         })
     if YT_REFRESH_TOKEN:
